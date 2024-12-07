@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>康威生命游戏</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f8fafc;
+      display: flex;
+      justify-content: center;
+      touch-action: none;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .card {
+      width: 360px;
+      height: 100vh;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+      padding: 12px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1e293b;
+      text-align: center;
+      margin: 12px 0 24px;
+    }
+
+    .button {
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      transition: opacity 0.2s;
+    }
+
+    .button:hover {
+      opacity: 0.9;
+    }
+
+    .button svg {
+      margin-right: 8px;
+    }
+
+    .control-buttons {
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .grid-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .pattern-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .pattern-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .grid-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 1px;
+      background: #cbd5e1;
+      padding: 1px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .cell {
+      width: 19px;
+      height: 19px;
+      background: white;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      transition: background-color 0.1s;
+    }
+
+    .cell.alive {
+      background: black;
+    }
+
+    .cell.clickable:hover {
+      background: #e2e8f0;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>康威生命游戏</h1>
+
+    <div class="control-buttons">
+      <button id="toggleButton" class="button" style="background-color: #40c057; width: 100%; height: 40px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        开始
+      </button>
+
+      <div class="grid-buttons">
+        <button id="clearButton" class="button" style="background-color: #868e96; height: 40px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 20H4V4"></path>
+          </svg>
+          清空
+        </button>
+        <button id="randomButton" class="button" style="background-color: #4c6ef5; height: 40px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 2v20M8 2v20M2 8h20M2 15h20"></path>
+          </svg>
+          随机
+        </button>
+      </div>
+    </div>
+
+    <div class="grid-container">
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <div class="pattern-buttons">
+      <div class="pattern-row">
+        <button class="button pattern-btn" style="background-color: #be4bdb; height: 32px; font-size: 12px;"
+          data-pattern="glider">滑翔机</button>
+        <button class="button pattern-btn" style="background-color: #be4bdb; height: 32px; font-size: 12px;"
+          data-pattern="lwss">轻型飞船</button>
+        <button class="button pattern-btn" style="background-color: #be4bdb; height: 32px; font-size: 12px;"
+          data-pattern="loafer">漫步者</button>
+      </div>
+      <div class="pattern-row">
+        <button class="button pattern-btn" style="background-color: #15aabf; height: 32px; font-size: 12px;"
+          data-pattern="pulsar">脉冲星</button>
+        <button class="button pattern-btn" style="background-color: #15aabf; height: 32px; font-size: 12px;"
+          data-pattern="blinker">闪烁者</button>
+        <button class="button pattern-btn" style="background-color: #15aabf; height: 32px; font-size: 12px;"
+          data-pattern="toad">蟾蜍</button>
+      </div>
+      <div class="pattern-row">
+        <button class="button pattern-btn" style="background-color: #e67700; height: 32px; font-size: 12px;"
+          data-pattern="block">方块</button>
+        <button class="button pattern-btn" style="background-color: #e67700; height: 32px; font-size: 12px;"
+          data-pattern="beehive">蜂巢</button>
+        <button class="button pattern-btn" style="background-color: #e67700; height: 32px; font-size: 12px;"
+          data-pattern="boat">船型</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GRID_SIZE = 18;
+    let grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+    let isRunning = false;
+    let intervalId = null;
+
+    const patterns = {
+      glider: {
+        pattern: [[0, 1, 0], [0, 0, 1], [1, 1, 1]]
+      },
+      lwss: {
+        pattern: [[0, 1, 1, 1, 1], [1, 0, 0, 0, 1], [0, 0, 0, 0, 1], [1, 0, 0, 1, 0]]
+      },
+      loafer: {
+        pattern: [[0, 1, 1, 0, 0], [1, 0, 0, 1, 0], [0, 1, 0, 0, 1], [0, 0, 1, 1, 1]]
+      },
+      pulsar: {
+        pattern: [
+          [0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0],
+          [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+          [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+          [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1],
+          [0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0]
+        ]
+      },
+      blinker: {
+        pattern: [[1, 1, 1]]
+      },
+      toad: {
+        pattern: [[0, 1, 1, 1], [1, 1, 1, 0]]
+      },
+      block: {
+        pattern: [[1, 1], [1, 1]]
+      },
+      beehive: {
+        pattern: [[0, 1, 1, 0], [1, 0, 0, 1], [0, 1, 1, 0]]
+      },
+      boat: {
+        pattern: [[1, 1, 0], [1, 0, 1], [0, 1, 0]]
+      }
+    };
+
+    function initializeGrid() {
+      const gridElement = document.getElementById('grid');
+      gridElement.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 19px)`;
+
+      gridElement.innerHTML = '';
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell clickable';
+          cell.dataset.row = i;
+          cell.dataset.col = j;
+          cell.addEventListener('click', () => toggleCell(i, j));
+          gridElement.appendChild(cell);
+        }
+      }
+    }
+
+    function updateGrid() {
+      const cells = document.getElementsByClassName('cell');
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          const cell = cells[i * GRID_SIZE + j];
+          if (grid[i][j]) {
+            cell.classList.add('alive');
+          } else {
+            cell.classList.remove('alive');
+          }
+        }
+      }
+    }
+
+    function toggleCell(i, j) {
+      if (isRunning) return;
+      grid[i][j] = !grid[i][j];
+      updateGrid();
+    }
+
+    function evolve() {
+      const newGrid = grid.map(row => [...row]);
+
+      for (let i = 0; i < GRID_SIZE; i++) {
+        for (let j = 0; j < GRID_SIZE; j++) {
+          let neighbors = 0;
+          for (let di = -1; di <= 1; di++) {
+            for (let dj = -1; dj <= 1; dj++) {
+              if (di === 0 && dj === 0) continue;
+              const ni = (i + di + GRID_SIZE) % GRID_SIZE;
+              const nj = (j + dj + GRID_SIZE) % GRID_SIZE;
+              if (grid[ni][nj]) neighbors++;
+            }
+          }
+
+          if (grid[i][j]) {
+            newGrid[i][j] = neighbors === 2 || neighbors === 3;
+          } else {
+            newGrid[i][j] = neighbors === 3;
+          }
+        }
+      }
+
+      grid = newGrid;
+      updateGrid();
+    }
+
+    function toggleSimulation() {
+      const button = document.getElementById('toggleButton');
+      isRunning = !isRunning;
+
+      if (isRunning) {
+        button.style.backgroundColor = '#fa5252';
+        button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                    暂停
+                `;
+        intervalId = setInterval(evolve, 200);
+        document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('clickable'));
+      } else {
+        button.style.backgroundColor = '#40c057';
+        button.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    开始
+                `;
+        clearInterval(intervalId);
+        document.querySelectorAll('.cell').forEach(cell => cell.classList.add('clickable'));
+      }
+    }
+
+    function clearGrid() {
+      grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+      updateGrid();
+    }
+
+    function randomizeGrid() {
+      grid = Array(GRID_SIZE).fill().map(() =>
+        Array(GRID_SIZE).fill().map(() => Math.random() > 0.85)
+      );
+      updateGrid();
+    }
+
+    function placePattern(pattern) {
+      if (isRunning) return;
+
+      const centerX = Math.floor(GRID_SIZE / 2) - Math.floor(pattern[0].length / 2);
+      const centerY = Math.floor(GRID_SIZE / 2) - Math.floor(pattern.length / 2);
+
+      grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+
+      pattern.forEach((row, i) => {
+        row.forEach((cell, j) => {
+          if (centerY + i >= 0 && centerY + i < GRID_SIZE &&
+            centerX + j >= 0 && centerX + j < GRID_SIZE) {
+            grid[centerY + i][centerX + j] = cell === 1;
+          }
+        });
+      });
+
+      updateGrid();
+    }
+
+    // Initialize
+    initializeGrid();
+    updateGrid();
+
+    // Event listeners
+    document.getElementById('toggleButton').addEventListener('click', toggleSimulation);
+    document.getElementById('clearButton').addEventListener('click', () => {
+      if (isRunning) toggleSimulation();
+      clearGrid();
+    });
+    document.getElementById('randomButton').addEventListener('click', () => {
+      if (isRunning) toggleSimulation();
+      randomizeGrid();
+    });
+    document.querySelectorAll('.pattern-btn').forEach(button => {
+      button.addEventListener('click', () => {
+        if (isRunning) toggleSimulation();
+        const pattern = patterns[button.dataset.pattern].pattern;
+        placePattern(pattern);
+      });
+    });
+  </script>
+</body>
+
+</html>
