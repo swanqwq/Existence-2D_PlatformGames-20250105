@@ -1,9 +1,19 @@
-《存在四部曲》是一个运用了html/css/javascript独立开发的2D平台跳跃游戏，一共有4关，每一关都揭示了一个关于存在的主题，借此来探问几个人生问题，每一关通关的方法都不同。
+*项目介绍*
+  这个项目做什么？
+    《存在四部曲》是一个运用了html/css/javascript独立开发的2D平台跳跃游戏，一共有4关，每一关都揭示了一个关于存在的主题，借此来探问几个人生问题，每一关通关的方法都不同。
 
-直接通过浏览器打开index.html文件即可打开游戏，闯关成功后自动跳转关卡。
+  它解决了什么问题？
+    学习了完整的2D闯关游戏开发流程，熟悉了游戏开发的主要函数和代码架构。
+    呈现了作者的人生思考，契合中国人的“存在焦虑”，以期待获得情感共鸣。
 
-"Tetralogy of Existence" is a 2D platformer game independently developed using HTML, CSS, and JavaScript. 
-It consists of four levels, each unveiling a theme about existence and exploring fundamental life questions. 
-The method to complete each level varies.  
+*安装使用*
+  下载解压后直接通过浏览器打开index.html文件即可打开游戏，闯关成功后自动跳转关卡。
 
-Simply open the `index.html` file in a browser to start the game. Upon completing a level, the game will automatically proceed to the next one.
+*项目负责人*
+  @swanqwq (孙家康)
+  
+*参与贡献方式*
+  独立开发
+  
+*开源协议*
+  MIT © Richard Littauer
