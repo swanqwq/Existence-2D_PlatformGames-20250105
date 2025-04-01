@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <!-- 在<head>标签中添加 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>存在感游戏 - 第三章：懒惰吃掉了你的时间</title>
+  <style>
+    .control-btn {
+      position: fixed;
+      width: 60px;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #leftBtn {
+      bottom: 20px;
+      left: 20px;
+    }
+
+    #rightBtn {
+      bottom: 20px;
+      left: 100px;
+    }
+
+    #jumpBtn {
+      bottom: 20px;
+      right: 20px;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #333;
+    }
+
+    #gameCanvas {
+      border: 2px solid #fff;
+      background: linear-gradient(to bottom, #1a1a2e 0%, #16213e 100%);
+      width: 100vw;
+      /* 让画布宽度填满屏幕 */
+      height: 56.25vw;
+      /* 保持16:9的宽高比 */
+      max-height: 100vh;
+      max-width: 177.78vh;
+    }
+
+    #existenceBar {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 20px;
+      background: #ddd;
+      border: 2px solid #000;
+    }
+
+    #existenceValue {
+      width: 100%;
+      height: 100%;
+      background: #4CAF50;
+      transition: width 0.3s;
+    }
+
+    #timer {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+
+    #gameResult {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 24px;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    #gameInfo {
+      position: absolute;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="existenceBar">
+    <div id="existenceValue"></div>
+  </div>
+  <div id="gameInfo">
+    <p>[懒惰] 正在吞噬你的时间...</p>
+    <p>在时间被吃掉之前，将它们变成永恒。</p>
+  </div>
+  <div id="timer">30秒</div>
+  <div id="gameResult"></div>
+  <div id="leftBtn" class="control-btn">←</div>
+  <div id="rightBtn" class="control-btn">→</div>
+  <div id="jumpBtn" class="control-btn">↑</div>
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const existenceValue = document.getElementById('existenceValue');
+    const timerElement = document.getElementById('timer');
+    const gameResultElement = document.getElementById('gameResult');
+
+    canvas.width = 800;
+    canvas.height = 600;
+
+    const gameState = {
+      timeRemaining: 30,
+      gameActive: true,
+      player: {
+        x: 50,
+        y: canvas.height - 70,
+        width: 30,
+        height: 50,
+        speedX: 0,
+        speedY: 0,
+        existence: 100,
+        onGround: false,
+        facing: 1
+      },
+      monster: {
+        x: canvas.width - 100,
+        y: canvas.height - 100,
+        width: 60,
+        height: 80,
+        speed: 0.8,
+        target: null
+      },
+      platforms: [
+        // 基础地面
+        { x: 0, y: canvas.height - 20, width: canvas.width, height: 20, type: 'ground' },
+        // 平台
+        { x: 100, y: canvas.height - 120, width: 200, height: 20, type: 'platform' },
+        { x: 400, y: canvas.height - 200, width: 200, height: 20, type: 'platform' },
+        { x: 200, y: canvas.height - 320, width: 200, height: 20, type: 'platform' },
+        { x: 500, y: canvas.height - 450, width: 200, height: 20, type: 'platform' }
+      ],
+      clocks: [], // 时钟数组
+      monuments: [], // 纪念碑数组
+      effects: [], // 特效数组
+      keys: {
+        ArrowLeft: false,
+        ArrowRight: false,
+        ArrowUp: false
+      }
+    };
+
+    // 键盘控制
+    window.addEventListener('keydown', (e) => {
+      if (gameState.keys.hasOwnProperty(e.code)) {
+        gameState.keys[e.code] = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (gameState.keys.hasOwnProperty(e.code)) {
+        gameState.keys[e.code] = false;
+      }
+    });
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    const jumpBtn = document.getElementById('jumpBtn');
+
+    // 左按钮
+    leftBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowLeft = true;
+    });
+
+    leftBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowLeft = false;
+    });
+
+    // 右按钮
+    rightBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowRight = true;
+    });
+
+    rightBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowRight = false;
+    });
+
+    // 跳跃按钮
+    jumpBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowUp = true;
+    });
+
+    jumpBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowUp = false;
+    });
+
+    function spawnClock() {
+      const availablePlatforms = gameState.platforms.filter(p => p.type === 'platform');
+      const platform = availablePlatforms[Math.floor(Math.random() * availablePlatforms.length)];
+
+      gameState.clocks.push({
+        x: platform.x + Math.random() * (platform.width - 30),
+        y: platform.y - 40,
+        width: 30,
+        height: 30,
+        timeValue: 5,
+        collected: false,
+        angle: 0
+      });
+    }
+
+    // 每隔一定时间生成新时钟
+    setInterval(() => {
+      if (gameState.gameActive && gameState.clocks.length < 5) {
+        spawnClock();
+      }
+    }, 3000);
+
+    function updatePlayer() {
+      const GRAVITY = 0.5;
+      const JUMP_FORCE = -12;
+      const MOVE_SPEED = 5;
+      const MAX_FALL_SPEED = 15;
+
+      if (gameState.keys.ArrowLeft) {
+        gameState.player.speedX = -MOVE_SPEED;
+        gameState.player.facing = -1;
+      } else if (gameState.keys.ArrowRight) {
+        gameState.player.speedX = MOVE_SPEED;
+        gameState.player.facing = 1;
+      } else {
+        gameState.player.speedX = 0;
+      }
+
+      if (gameState.keys.ArrowUp && gameState.player.onGround) {
+        gameState.player.speedY = JUMP_FORCE;
+        gameState.player.onGround = false;
+      }
+
+      if (!gameState.player.onGround) {
+        gameState.player.speedY = Math.min(gameState.player.speedY + GRAVITY, MAX_FALL_SPEED);
+      }
+
+      gameState.player.x += gameState.player.speedX;
+      gameState.player.y += gameState.player.speedY;
+
+      gameState.player.onGround = false;
+      gameState.platforms.forEach(platform => {
+        if (checkCollision(gameState.player, platform)) {
+          if (gameState.player.speedY > 0 &&
+            gameState.player.y + gameState.player.height - gameState.player.speedY <= platform.y) {
+            gameState.player.y = platform.y - gameState.player.height;
+            gameState.player.speedY = 0;
+            gameState.player.onGround = true;
+          }
+          else if (gameState.player.speedY < 0 &&
+            gameState.player.y - gameState.player.speedY >= platform.y + platform.height) {
+            gameState.player.y = platform.y + platform.height;
+            gameState.player.speedY = 0;
+          }
+          else if (gameState.player.speedX > 0) {
+            gameState.player.x = platform.x - gameState.player.width;
+          } else if (gameState.player.speedX < 0) {
+            gameState.player.x = platform.x + platform.width;
+          }
+        }
+      });
+
+      gameState.player.x = Math.max(0, Math.min(canvas.width - gameState.player.width, gameState.player.x));
+      gameState.player.y = Math.min(canvas.height - gameState.player.height, gameState.player.y);
+    }
+
+    function updateMonster() {
+      if (!gameState.monster.target) {
+        let closestClock = null;
+        let minDistance = Infinity;
+
+        gameState.clocks.forEach(clock => {
+          if (!clock.collected) {
+            const distance = getDistance(
+              gameState.monster.x,
+              gameState.monster.y,
+              clock.x,
+              clock.y
+            );
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestClock = clock;
+            }
+          }
+        });
+
+        gameState.monster.target = closestClock;
+
+        // 如果没有找到时钟目标，让怪物自由移动
+        if (!closestClock) {
+          // 如果没有移动方向，随机设置一个
+          if (!gameState.monster.wanderAngle) {
+            gameState.monster.wanderAngle = Math.random() * Math.PI * 2;
+          }
+
+          // 更新位置
+          gameState.monster.x += Math.cos(gameState.monster.wanderAngle) * gameState.monster.speed;
+          gameState.monster.y += Math.sin(gameState.monster.wanderAngle) * gameState.monster.speed;
+
+          // 碰到边界时改变方向
+          if (gameState.monster.x <= 0 ||
+            gameState.monster.x >= canvas.width - gameState.monster.width ||
+            gameState.monster.y <= 0 ||
+            gameState.monster.y >= canvas.height - gameState.monster.height) {
+            gameState.monster.wanderAngle = Math.random() * Math.PI * 2;
+          }
+
+          // 偶尔随机改变方向
+          if (Math.random() < 0.02) {
+            gameState.monster.wanderAngle = Math.random() * Math.PI * 2;
+          }
+        }
+      }
+
+      // 有目标时的追踪逻辑保持不变
+      if (gameState.monster.target) {
+        const dx = gameState.monster.target.x - gameState.monster.x;
+        const dy = gameState.monster.target.y - gameState.monster.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0) {
+          gameState.monster.x += (dx / distance) * gameState.monster.speed;
+          gameState.monster.y += (dy / distance) * gameState.monster.speed;
+        }
+
+        if (checkCollision(gameState.monster, gameState.monster.target)) {
+          const index = gameState.clocks.indexOf(gameState.monster.target);
+          if (index > -1) {
+            gameState.clocks.splice(index, 1);
+            gameState.player.existence -= 2;
+            addEatEffect(gameState.monster.target.x, gameState.monster.target.y);
+          }
+          gameState.monster.target = null;
+          // 重置游荡角度，这样会在新的随机方向开始游荡
+          gameState.monster.wanderAngle = null;
+        }
+      }
+
+      // 确保怪物不会离开画面
+      gameState.monster.x = Math.max(0, Math.min(canvas.width - gameState.monster.width, gameState.monster.x));
+      gameState.monster.y = Math.max(0, Math.min(canvas.height - gameState.monster.height, gameState.monster.y));
+    };
+
+    function updateClocks() {
+      gameState.clocks.forEach(clock => {
+        clock.angle += 0.02;
+
+        if (!clock.collected && checkCollision(gameState.player, clock)) {
+          clock.collected = true;
+          createMonument(clock);
+          const index = gameState.clocks.indexOf(clock);
+          if (index > -1) {
+            gameState.clocks.splice(index, 1);
+          }
+          gameState.player.existence = Math.min(100, gameState.player.existence + 20);
+        }
+      });
+    }
+
+    function createMonument(clock) {
+      gameState.monuments.push({
+        x: clock.x,
+        y: clock.y,
+        width: 40,
+        height: 60,
+        timeValue: clock.timeValue,
+        glowIntensity: 1
+      });
+    }
+
+    function addEatEffect(x, y) {
+      for (let i = 0; i < 10; i++) {
+        gameState.effects.push({
+          x: x,
+          y: y,
+          size: 5,
+          speed: Math.random() * 5 + 2,
+          angle: (Math.PI * 2 * i) / 10,
+          life: 1,
+          color: '#FF0000'
+        });
+      }
+    }
+
+    function updateEffects() {
+      for (let i = gameState.effects.length - 1; i >= 0; i--) {
+        const effect = gameState.effects[i];
+        effect.x += Math.cos(effect.angle) * effect.speed;
+        effect.y += Math.sin(effect.angle) * effect.speed;
+        effect.life -= 0.02;
+
+        if (effect.life <= 0) {
+          gameState.effects.splice(i, 1);
+        }
+      }
+    }
+
+    function checkCollision(rect1, rect2) {
+      return rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y;
+    }
+
+    function getDistance(x1, y1, x2, y2) {
+      return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    }
+
+    function updateExistence() {
+      gameState.player.existence -= 0.02;
+      gameState.player.existence = Math.max(0, Math.min(100, gameState.player.existence));
+      existenceValue.style.width = `${gameState.player.existence}%`;
+    }
+
+    let lastTime = Date.now();
+    function updateTimer() {
+      if (!gameState.gameActive) return;
+
+      const currentTime = Date.now();
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      gameState.timeRemaining -= deltaTime;
+      timerElement.textContent = Math.ceil(gameState.timeRemaining) + "秒";
+
+      if (gameState.timeRemaining <= 0) {
+        gameState.gameActive = false;
+        gameResultElement.style.display = 'block';
+        if (gameState.player.existence > 50) {
+          gameResultElement.textContent = "成功了！你战胜了懒惰！\n3秒后进入下一关...";
+          gameResultElement.style.color = '#4CAF50';
+          setTimeout(() => {
+            window.location.href = 'chapter4.html';
+          }, 3000);
+        } else {
+          gameResultElement.textContent = "失败了...时间被懒惰吞噬了";
+          gameResultElement.style.color = '#f44336';
+        }
+      } else if (gameState.player.existence <= 0) {
+        gameState.gameActive = false;
+        gameResultElement.style.display = 'block';
+        gameResultElement.textContent = "失败了...你堕入了虚无";
+        gameResultElement.style.color = '#f44336';
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 绘制星空背景
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 100; i++) {
+        const x = Math.sin(i * 567) * canvas.width;
+        const y = Math.cos(i * 321) * canvas.height;
+        const size = Math.sin(i) * 2 + 1;
+        ctx.fillRect((x + Date.now() / 100) % canvas.width, y % canvas.height, size, size);
+      }
+
+      // 绘制平台
+      gameState.platforms.forEach(platform => {
+        if (platform.type === 'ground') {
+          ctx.fillStyle = '#2c3e50';
+        } else {
+          ctx.fillStyle = '#34495e';
+        }
+        ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+
+        if (platform.type === 'platform') {
+          ctx.strokeStyle = '#3498db';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(platform.x, platform.y);
+          ctx.lineTo(platform.x + platform.width, platform.y);
+          ctx.stroke();
+        }
+      });
+
+      // 绘制时钟
+      gameState.clocks.forEach(clock => {
+        // 时钟外圈
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(clock.x + clock.width / 2, clock.y + clock.height / 2, 15, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 时钟指针
+        const centerX = clock.x + clock.width / 2;
+        const centerY = clock.y + clock.height / 2;
+
+        // 时针
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(
+          centerX + Math.cos(clock.angle) * 10,
+          centerY + Math.sin(clock.angle) * 10
+        );
+        ctx.stroke();
+
+        // 分针
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(
+          centerX + Math.cos(clock.angle * 12) * 7,
+          centerY + Math.sin(clock.angle * 12) * 7
+        );
+        ctx.stroke();
+      });
+
+      // 绘制纪念碑
+      gameState.monuments.forEach(monument => {
+        // 纪念碑底座
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(monument.x, monument.y + 20, monument.width, monument.height - 20);
+
+        // 纪念碑顶部
+        ctx.beginPath();
+        ctx.moveTo(monument.x, monument.y + 20);
+        ctx.lineTo(monument.x + monument.width / 2, monument.y);
+        ctx.lineTo(monument.x + monument.width, monument.y + 20);
+        ctx.fill();
+
+        // 发光效果
+        ctx.fillStyle = `rgba(52, 152, 219, ${monument.glowIntensity * 0.3})`;
+        ctx.beginPath();
+        ctx.arc(monument.x + monument.width / 2,
+          monument.y + monument.height / 2,
+          30 + Math.sin(Date.now() / 500) * 5,
+          0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 绘制怪物
+      ctx.fillStyle = '#8e44ad';
+      ctx.beginPath();
+      ctx.arc(gameState.monster.x + gameState.monster.width / 2,
+        gameState.monster.y + gameState.monster.height / 2,
+        gameState.monster.width / 2,
+        0, Math.PI * 2);
+      ctx.fill();
+
+      // 怪物眼睛
+      ctx.fillStyle = '#ffffff';
+      const eyeOffset = gameState.monster.target ?
+        Math.atan2(gameState.monster.target.y - gameState.monster.y,
+          gameState.monster.target.x - gameState.monster.x) : 0;
+      ctx.beginPath();
+      ctx.arc(gameState.monster.x + gameState.monster.width / 2 + Math.cos(eyeOffset) * 10,
+        gameState.monster.y + gameState.monster.height / 2 + Math.sin(eyeOffset) * 10,
+        5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 绘制玩家
+      ctx.globalAlpha = gameState.player.existence / 100;
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(gameState.player.x, gameState.player.y,
+        gameState.player.width, gameState.player.height);
+
+      // 玩家发光效果
+      ctx.fillStyle = `rgba(231, 76, 60, ${gameState.player.existence / 200})`;
+      ctx.beginPath();
+      ctx.arc(gameState.player.x + gameState.player.width / 2,
+        gameState.player.y + gameState.player.height / 2,
+        25 + Math.sin(Date.now() / 500) * 5,
+        0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+
+      // 绘制特效
+      gameState.effects.forEach(effect => {
+        ctx.fillStyle = `rgba(255, 0, 0, ${effect.life})`;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, effect.size * effect.life, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function gameLoop() {
+      if (gameState.gameActive) {
+        updatePlayer();
+        updateMonster();
+        updateClocks();
+        updateEffects();
+        updateExistence();
+        updateTimer();
+        draw();
+      }
+      requestAnimationFrame(gameLoop);
+    }
+
+    // 初始化游戏
+    for (let i = 0; i < 3; i++) {
+      spawnClock();
+    }
+    gameLoop();
+  </script>
+</body>
+
+</html>

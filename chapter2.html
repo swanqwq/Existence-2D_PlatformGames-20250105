@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <!-- 在<head>标签中添加 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>存在感游戏 - 第二章：价值存在感</title>
+  <style>
+    .control-btn {
+      position: fixed;
+      width: 60px;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #leftBtn {
+      bottom: 20px;
+      left: 20px;
+    }
+
+    #rightBtn {
+      bottom: 20px;
+      left: 100px;
+    }
+
+    #jumpBtn {
+      bottom: 20px;
+      right: 20px;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #333;
+    }
+
+    #gameCanvas {
+      border: 2px solid #fff;
+      background: linear-gradient(to bottom, #87CEEB 0%, #4682B4 100%);
+      width: 100vw;
+      /* 让画布宽度填满屏幕 */
+      height: 56.25vw;
+      /* 保持16:9的宽高比 */
+      max-height: 100vh;
+      max-width: 177.78vh;
+    }
+
+    #existenceBar {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 20px;
+      background: #ddd;
+      border: 2px solid #000;
+    }
+
+    #existenceValue {
+      width: 100%;
+      height: 100%;
+      background: #4CAF50;
+      transition: width 0.3s;
+    }
+
+    #timer {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      background: #333;
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+
+    #gameResult {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 24px;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    #gameInfo {
+      position: absolute;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="existenceBar">
+    <div id="existenceValue"></div>
+  </div>
+  <div id="gameInfo">
+    <p>获得奖杯，证明自己的价值。</p>
+    <p>没有成就的人，终将被遗忘。</p>
+  </div>
+  <div id="timer">30秒</div>
+  <div id="gameResult"></div>
+  <div id="leftBtn" class="control-btn">←</div>
+  <div id="rightBtn" class="control-btn">→</div>
+  <div id="jumpBtn" class="control-btn">↑</div>
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const existenceValue = document.getElementById('existenceValue');
+    const timerElement = document.getElementById('timer');
+    const gameResultElement = document.getElementById('gameResult');
+
+    canvas.width = 800;
+    canvas.height = 600;
+
+    // 游戏状态
+    const gameState = {
+      timeRemaining: 30,
+      gameActive: true,
+      player: {
+        x: 50,
+        y: canvas.height - 70,
+        width: 30,
+        height: 50,
+        speedX: 0,
+        speedY: 0,
+        existence: 100,
+        onGround: false,
+        facing: 1  // 1表示朝右，-1表示朝左
+      },
+      platforms: [
+        // 基础地面
+        { x: 0, y: canvas.height - 20, width: canvas.width, height: 20, type: 'ground' },
+        // 左侧平台组
+        { x: 100, y: canvas.height - 120, width: 120, height: 20, type: 'platform' },
+        { x: 50, y: canvas.height - 220, width: 100, height: 20, type: 'platform' },
+        { x: 200, y: canvas.height - 320, width: 100, height: 20, type: 'platform' },
+        // 中间平台组
+        { x: 350, y: canvas.height - 150, width: 150, height: 20, type: 'platform' },
+        { x: 300, y: canvas.height - 250, width: 120, height: 20, type: 'platform' },
+        { x: 400, y: canvas.height - 350, width: 100, height: 20, type: 'platform' },
+        // 右侧平台组
+        { x: 600, y: canvas.height - 180, width: 120, height: 20, type: 'platform' },
+        { x: 650, y: canvas.height - 280, width: 100, height: 20, type: 'platform' },
+        { x: 550, y: canvas.height - 380, width: 100, height: 20, type: 'platform' }
+      ],
+      trophy: {
+        x: 0,
+        y: 0,
+        width: 30,
+        height: 30,
+        active: false,
+        collected: false,
+        collectTime: 0
+      },
+      effects: [],
+      keys: {
+        ArrowLeft: false,
+        ArrowRight: false,
+        ArrowUp: false
+      }
+    };
+
+    // 键盘控制
+    window.addEventListener('keydown', (e) => {
+      if (gameState.keys.hasOwnProperty(e.code)) {
+        gameState.keys[e.code] = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (gameState.keys.hasOwnProperty(e.code)) {
+        gameState.keys[e.code] = false;
+      }
+    });
+
+    // 在window.addEventListener之后添加以下代码
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    const jumpBtn = document.getElementById('jumpBtn');
+
+    // 左按钮
+    leftBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowLeft = true;
+    });
+
+    leftBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowLeft = false;
+    });
+
+    // 右按钮
+    rightBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowRight = true;
+    });
+
+    rightBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowRight = false;
+    });
+
+    // 跳跃按钮
+    jumpBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowUp = true;
+    });
+
+    jumpBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      gameState.keys.ArrowUp = false;
+    });
+
+    function spawnTrophy() {
+      if (!gameState.trophy.active) {
+        const availablePlatforms = gameState.platforms.filter(p => p.type === 'platform');
+        const platform = availablePlatforms[Math.floor(Math.random() * availablePlatforms.length)];
+
+        gameState.trophy.x = platform.x + (platform.width - gameState.trophy.width) / 2;
+        gameState.trophy.y = platform.y - gameState.trophy.height - 5;
+        gameState.trophy.active = true;
+        gameState.trophy.collected = false;
+      }
+    }
+
+    function updatePlayer() {
+      const GRAVITY = 0.5;
+      const JUMP_FORCE = -12;
+      const MOVE_SPEED = 5;
+      const MAX_FALL_SPEED = 15;
+
+      // 水平移动
+      if (gameState.keys.ArrowLeft) {
+        gameState.player.speedX = -MOVE_SPEED;
+        gameState.player.facing = -1;
+      } else if (gameState.keys.ArrowRight) {
+        gameState.player.speedX = MOVE_SPEED;
+        gameState.player.facing = 1;
+      } else {
+        gameState.player.speedX = 0;
+      }
+
+      // 跳跃
+      if (gameState.keys.ArrowUp && gameState.player.onGround) {
+        gameState.player.speedY = JUMP_FORCE;
+        gameState.player.onGround = false;
+      }
+
+      // 应用重力
+      if (!gameState.player.onGround) {
+        gameState.player.speedY = Math.min(gameState.player.speedY + GRAVITY, MAX_FALL_SPEED);
+      }
+
+      // 更新位置
+      gameState.player.x += gameState.player.speedX;
+      gameState.player.y += gameState.player.speedY;
+
+      // 平台碰撞检测
+      gameState.player.onGround = false;
+      gameState.platforms.forEach(platform => {
+        if (checkCollision(gameState.player, platform)) {
+          // 从上方碰撞
+          if (gameState.player.speedY > 0 &&
+            gameState.player.y + gameState.player.height - gameState.player.speedY <= platform.y) {
+            gameState.player.y = platform.y - gameState.player.height;
+            gameState.player.speedY = 0;
+            gameState.player.onGround = true;
+          }
+          // 从下方碰撞
+          else if (gameState.player.speedY < 0 &&
+            gameState.player.y - gameState.player.speedY >= platform.y + platform.height) {
+            gameState.player.y = platform.y + platform.height;
+            gameState.player.speedY = 0;
+          }
+          // 从侧面碰撞
+          else if (gameState.player.speedX > 0) {
+            gameState.player.x = platform.x - gameState.player.width;
+          } else if (gameState.player.speedX < 0) {
+            gameState.player.x = platform.x + platform.width;
+          }
+        }
+      });
+
+      // 奖杯碰撞检测
+      if (gameState.trophy.active && !gameState.trophy.collected &&
+        checkCollision(gameState.player, gameState.trophy)) {
+        gameState.trophy.collected = true;
+        gameState.trophy.active = false;
+        gameState.trophy.collectTime = Date.now();
+        gameState.player.existence = Math.min(100, gameState.player.existence + 30);
+
+        // 添加收集特效
+        for (let i = 0; i < 10; i++) {
+          gameState.effects.push({
+            x: gameState.trophy.x + gameState.trophy.width / 2,
+            y: gameState.trophy.y + gameState.trophy.height / 2,
+            size: 5,
+            speed: Math.random() * 5 + 2,
+            angle: (Math.PI * 2 * i) / 10,
+            life: 1
+          });
+        }
+      }
+
+      // 限制在画布范围内
+      gameState.player.x = Math.max(0, Math.min(canvas.width - gameState.player.width, gameState.player.x));
+      gameState.player.y = Math.min(canvas.height - gameState.player.height, gameState.player.y);
+    }
+
+    function checkCollision(rect1, rect2) {
+      return rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y;
+    }
+
+    function updateEffects() {
+      for (let i = gameState.effects.length - 1; i >= 0; i--) {
+        const effect = gameState.effects[i];
+        effect.x += Math.cos(effect.angle) * effect.speed;
+        effect.y += Math.sin(effect.angle) * effect.speed;
+        effect.life -= 0.02;
+
+        if (effect.life <= 0) {
+          gameState.effects.splice(i, 1);
+        }
+      }
+    }
+
+    function updateExistence() {
+      // 默认每帧降低存在感
+      gameState.player.existence -= 0.06;
+
+      // 如果最近收集了奖杯，降低的速度减缓
+      if (Date.now() - gameState.trophy.collectTime < 3000) {
+        gameState.player.existence += 0.04;
+      }
+
+      // 确保存在感在0-100之间
+      gameState.player.existence = Math.max(0, Math.min(100, gameState.player.existence));
+      existenceValue.style.width = `${gameState.player.existence}%`;
+
+      // 如果存在感过低，玩家变得更透明
+      ctx.globalAlpha = Math.max(0.3, gameState.player.existence / 100);
+    }
+
+    let lastTime = Date.now();
+    let lastTrophySpawn = Date.now();
+
+    function updateTimer() {
+      if (!gameState.gameActive) return;
+
+      const currentTime = Date.now();
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      gameState.timeRemaining -= deltaTime;
+      timerElement.textContent = Math.ceil(gameState.timeRemaining) + "秒";
+
+      // 定期生成新奖杯
+      if (currentTime - lastTrophySpawn > 5000 && !gameState.trophy.active) {
+        spawnTrophy();
+        lastTrophySpawn = currentTime;
+      }
+
+      // 检查游戏结束条件
+      if (gameState.timeRemaining <= 0) {
+        gameState.gameActive = false;
+        gameResultElement.style.display = 'block';
+        if (gameState.player.existence > 50) {
+          gameResultElement.textContent = "成功了！你证明了自己的价值！\n3秒后进入下一关...";
+          gameResultElement.style.color = '#4CAF50';
+          setTimeout(() => {
+            window.location.href = 'chapter3.html';  // 跳转到第三关
+          }, 3000);
+        } else {
+          gameResultElement.textContent = "失败了...你没能证明自己的价值";
+          gameResultElement.style.color = '#f44336';
+        }
+      } else if (gameState.player.existence <= 0) {
+        gameState.gameActive = false;
+        gameResultElement.style.display = 'block';
+        gameResultElement.textContent = "失败了...你的存在感消失了";
+        gameResultElement.style.color = '#f44336';
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+
+      // 绘制装饰性背景元素
+      drawBackground();
+
+      // 绘制平台
+      gameState.platforms.forEach(platform => {
+        if (platform.type === 'ground') {
+          ctx.fillStyle = '#654321';
+        } else {
+          ctx.fillStyle = '#8B4513';
+        }
+        ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+
+        // 平台装饰
+        if (platform.type === 'platform') {
+          ctx.fillStyle = '#228B22';
+          for (let i = 0; i < platform.width; i += 20) {
+            ctx.fillRect(platform.x + i, platform.y - 2, 15, 2);
+          }
+        }
+      });
+
+      // 绘制奖杯
+      if (gameState.trophy.active && !gameState.trophy.collected) {
+        const x = gameState.trophy.x;
+        const y = gameState.trophy.y;
+
+        // 绘制奖杯杯身
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.moveTo(x + 10, y + 5);
+        ctx.lineTo(x + 20, y + 5);
+        ctx.lineTo(x + 17, y + 20);
+        ctx.lineTo(x + 13, y + 20);
+        ctx.closePath();
+        ctx.fill();
+
+        // 绘制奖杯底座
+        ctx.fillRect(x + 8, y + 20, 14, 3);
+        ctx.fillRect(x + 12, y + 23, 6, 5);
+
+        // 绘制奖杯把手
+        ctx.beginPath();
+        ctx.arc(x + 5, y + 10, 5, -Math.PI / 2, Math.PI / 2);
+        ctx.arc(x + 25, y + 10, 5, Math.PI / 2, -Math.PI / 2);
+        ctx.stroke();
+
+        // 添加光泽效果
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(x + 12, y + 7);
+        ctx.lineTo(x + 14, y + 7);
+        ctx.lineTo(x + 13, y + 15);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      // 绘制特效
+      gameState.effects.forEach(effect => {
+        ctx.fillStyle = `rgba(255, 215, 0, ${effect.life})`;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, effect.size * effect.life, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 绘制玩家
+      ctx.globalAlpha = gameState.player.existence / 100;
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height);
+
+      // 绘制玩家表情
+      ctx.fillStyle = '#000';
+      const eyeX = gameState.player.facing > 0 ? gameState.player.x + 20 : gameState.player.x + 5;
+      ctx.fillRect(eyeX, gameState.player.y + 10, 5, 5);
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawBackground() {
+      // 绘制远景山脉
+      ctx.fillStyle = '#4B0082';
+      ctx.beginPath();
+      ctx.moveTo(0, 400);
+      ctx.lineTo(200, 200);
+      ctx.lineTo(400, 350);
+      ctx.lineTo(600, 180);
+      ctx.lineTo(800, 420);
+      ctx.lineTo(800, 600);
+      ctx.lineTo(0, 600);
+      ctx.fill();
+
+      // 绘制装饰性云朵
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      for (let i = 0; i < 5; i++) {
+        const x = (i * 200) + ((Date.now() / 50) % 200);
+        const y = 50 + (i * 30);
+        drawCloud(x, y);
+      }
+    }
+
+    function drawCloud(x, y) {
+      ctx.beginPath();
+      ctx.arc(x, y, 20, 0, Math.PI * 2);
+      ctx.arc(x + 15, y - 10, 15, 0, Math.PI * 2);
+      ctx.arc(x + 15, y + 10, 15, 0, Math.PI * 2);
+      ctx.arc(x + 30, y, 20, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function gameLoop() {
+      if (gameState.gameActive) {
+        updatePlayer();
+        updateEffects();
+        updateExistence();
+        updateTimer();
+        draw();
+      }
+      requestAnimationFrame(gameLoop);
+    }
+
+    // 初始化游戏
+    spawnTrophy();
+    gameLoop();
+  </script>
+</body>
+
+</html>
